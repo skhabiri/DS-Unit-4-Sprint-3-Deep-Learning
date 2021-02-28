@@ -81,12 +81,58 @@ model.add(LSTM(128, input_shape=(timesteps, len(chars))))
 model.add(Dense(units=len(chars), activation='softmax'))
 model.compile(loss='categorical_crossentropy', optimizer='adam')
 ```
+
+## ann_rnn_lstm-431a.ipynb:
+The purpose of this notebook is to regenerate some text from Shakespeare writings. After cleaning the writings and removing the odd characters and extra white spaces, we create a one giant text from all his work and save it as `text` variable. Our sequences are comprised of characters. The length of our character set is 36, each of them assigned to an ordinal integer. The characters are saved into variable `char` and the mapping dictionaries are saved as `char_int` and `int_char`.
+### Generate training data sequences and target labels:
+We capture 40 consecutive characters as our time step with stepping=20. The stepping dictates how far apart to move the start index to capture the sequence in the text` variable. For generating text we don’t have any test data and the entire dataset is used to train the NN. This leads to approximately 700K sequences. The target label is the character after the last character in a sequence.
+### LSTM as Input Layer:
+We can either use LSTM or Embedding as the input layer. Here each character is going to be considered in terms of its relationship with other characters. If we use LSTM as the input layer, the input tensor has a shape of (batch_size, timestep, features). This is defined by `input_shape` or `input_dim` parameters. Batch_size can be skipped and is taken as None which indicates that it’s dynamically determined. The same is true for timestep. Either we can skip it and let’s be entered and None, so that the timestep can be detected dynamically or we explicitly enter the value. In the latter case despite training the model with a fixed timestep we can still pass an input query with a different time step and the model will process that. Here are different ways we can pass the input tensor information to the input layer. Features refers to the size of the dictionary. Here we have a dictionary of characters with a length of 36 and the time step is 40 characters.
+With LSTM as the input layer we need to specify:
+* `input_shape=[timesteps, features]` or
+* `input_shape = [None, features]` or
+* `input_dim = features`
+> In prediction of all the above three cases, the sequence could have bigger or smaller step size and it would still work.
+```
+# input method 1
+model_lstm.add(LSTM(128, input_shape=(timestep, dict_size)))
+ 
+# input method 2
+model_lstm.add(LSTM(128, input_shape=(None, dict_size)))
+ 
+# input method 3
+model_lstm.add(LSTM(128, input_dim=dict_size))
+```
+### Reshape the input tensor:
+To match the definition we need to convert the input tensor sequences into a three dimension tensor. The first axis is the sample number with 1 feature. The second axis is the timing step and it has 40 features indicating the position of the character in the sequence. The third axis is the input features or dictionary size which has 36 features. Therefore, `X.shape=(1,timingstep=40, features=len(chars)=36)`.
+ 
+### Embedding as Input layer:
+With Embedding as the input layer, we can specify the input tensor shape in different ways. `input_dim` in the Embedding layer refers to features or the size of the dictionary (36). A parameter named `input_length` can arbitrarily be used to specify the timing step (40) in character sequence, or be left None to be handled dynamically.
+1. input_dim=features or
+2. input_dim=features, input_length=stepsize or
+3. input_dim=features, input_shape=(stepsize,)
+> In prediction of all three cases, the sequence could have bigger or smaller step size and it would still work with some warning.
+```
+# define input layer
+# method1, timestep will be derived dynamically
+model_embed.add(Embedding(output_dim=64, input_dim=dict_size))
+ 
+# method2, timestep of the sequence is fixed:
+# The query input still can be in different timesteps and we would only get warning
+model_embed.add(Embedding(input_dim=dict_size, output_dim = 64, input_length=timestep))
+ 
+# method3, use input_shape to define timestep
+model_embed.add(Embedding(output_dim=64, input_dim=dict_size, input_shape=(timestep,)))
+```
+Note that here embedding is used for the characters not the words. We write a callback function to generate 400 characters after receiving a random see at the end of each epoch. As epochs progress and back propagation adjusts the parameters we get more improvement in generated text based on the random seeds.
+
+
 ### Libraries:
 ```
 from __future__ import print_function
 from tensorflow.keras.preprocessing import sequence
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Embedding
+from tensorflow.keras.layers import Dense, Embedding, Bidirectional
 from tensorflow.keras.layers import LSTM
 from tensorflow.keras.datasets import imdb
 import numpy as np
